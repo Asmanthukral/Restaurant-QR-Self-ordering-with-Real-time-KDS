@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Thakur's Kababs and Curry</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0d0d0d;
+            --gold-primary: #d4af37;
+            --text-light: #f5f5f5;
+            --text-muted: #a0a0a0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-light); padding: 20px; }
+        
+        header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #222; padding-bottom: 15px; }
+        .logo-text { font-family: 'Cinzel', serif; font-size: 28px; color: var(--gold-primary); }
+        .logo-subtext { font-size: 14px; color: var(--text-muted); letter-spacing: 2px; }
+
+        .container { max-width: 1200px; margin: 0 auto; }
+        h2 { color: var(--gold-primary); margin-bottom: 20px; font-family: 'Cinzel', serif; }
+
+        .orders-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        
+        .order-card {
+            background: linear-gradient(145deg, #161010, #121212);
+            border: 1px solid #262626;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .order-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222; padding-bottom: 10px; margin-bottom: 12px; }
+        .table-badge { background: var(--gold-primary); color: #000; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 12px; }
+        .order-time { font-size: 12px; color: var(--text-muted); }
+
+        .item-list { margin-bottom: 15px; }
+        .item-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; color: #ddd; }
+        
+        .order-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #222; padding-top: 12px; }
+        .total-price { font-weight: bold; color: var(--gold-primary); font-size: 16px; }
+        
+        .status-btn {
+            background: #d9534f;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-btn.completed { background: #5cb85c; }
+        
+        .no-orders { text-align: center; color: var(--text-muted); margin-top: 50px; font-size: 18px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-text">Thakur's</div>
+        <div class="logo-subtext">LIVE KITCHEN ADMIN DASHBOARD</div>
+    </header>
+
+    <div class="container">
+        <h2>Incoming Orders</h2>
+        <div id="orders-container" class="orders-grid">
+            <div class="no-orders">Loading live orders...</div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBAlnapud2yDq8XqVLSc0j3M1HfBHSXrso",
+            authDomain: "restaurant-web-qr.firebaseapp.com",
+            projectId: "restaurant-web-qr",
+            storageBucket: "restaurant-web-qr.firebasestorage.app",
+            messagingSenderId: "123100593096",
+            appId: "1:123100593096:web:216f40047477fd7dac5efd"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const ordersContainer = document.getElementById('orders-container');
+
+        // Real-time listener for orders collection
+        onSnapshot(collection(db, "orders"), (snapshot) => {
+            ordersContainer.innerHTML = "";
+
+            if (snapshot.empty) {
+                ordersContainer.innerHTML = `<div class="no-orders">No active orders right now! 🍢</div>`;
+                return;
+            }
+
+            // Sort orders by timestamp descending (newest first)
+            let orders = [];
+            snapshot.forEach((docSnap) => {
+                orders.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            
+            orders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            orders.forEach((order) => {
+                let itemsHtml = "";
+                if (order.items && Array.isArray(order.items)) {
+                    order.items.forEach(item => {
+                        itemsHtml += `<div class="item-row"><span>${item.name} x ${item.qty}</span><span>₹${item.price * item.qty}</span></div>`;
+                    });
+                }
+
+                const card = document.createElement('div');
+                card.className = 'order-card';
+                card.innerHTML = `
+                    <div class="order-header">
+                
+                        <span class="table-badge">Table No: ${order.table || 'Takeaway'}</span>
+                    </div>
+                    <div class="item-list">
+                        ${itemsHtml}
+                    </div>
+                    <div class="order-footer">
+                        <span class="total-price">Total: ₹${order.total || 0}</span>
+                        <button class="status-btn ${order.status === 'Completed' ? 'completed' : ''}" onclick="toggleStatus('${order.id}', '${order.status}')">
+                            ${order.status || 'New Order'}
+                        </button>
+                    </div>
+                `;
+                ordersContainer.appendChild(card);
+            });
+        });
+
+        // Function to update order status or remove when clicked
+        window.toggleStatus = async (orderId, currentStatus) => {
+            const orderRef = doc(db, "orders", orderId);
+            if(currentStatus === 'New Order') {
+                await updateDoc(orderRef, { status: 'Completed' });
+            } else {
+                // Delete or clear completed orders if desired, or keep them
+                await deleteDoc(orderRef);
+            }
+        };
+    </script>
+</body>
+</html>
